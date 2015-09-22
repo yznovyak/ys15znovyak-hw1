@@ -1,8 +1,11 @@
 package ua.yandex.shad.tempseries;
 
 import java.lang.Math;
+import java.util.InputMismatchException;
 
 public class TemperatureSeriesAnalysis {
+    public static final double MIN_TEMPERATURE = -273;
+
     private int size;
     private double[] series;
 
@@ -12,8 +15,8 @@ public class TemperatureSeriesAnalysis {
     }
 
     public TemperatureSeriesAnalysis(double[] series) {
-        this.series = series.clone();
-        this.size = this.series.length;
+        this();
+        addTemps(series);
     }
 
     public double average(){
@@ -121,6 +124,11 @@ public class TemperatureSeriesAnalysis {
     }
 
     public int addTemps(double ... newTemps){
+        // Verify newTemps
+        for (double temp : newTemps)
+            if (temp < MIN_TEMPERATURE)
+                throw new InputMismatchException("Series can't contain temperature less than absolute zero.");
+
         int capacity = series.length;
         if (capacity == 0) {
             // Doubling series length doesn't make sense if initial
