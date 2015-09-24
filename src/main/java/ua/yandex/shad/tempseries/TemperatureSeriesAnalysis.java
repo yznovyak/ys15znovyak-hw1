@@ -1,10 +1,12 @@
 package ua.yandex.shad.tempseries;
 
-import java.lang.Math;
 import java.util.InputMismatchException;
 
 public class TemperatureSeriesAnalysis {
     public static final double MIN_TEMPERATURE = -273;
+
+    // Doubles that differ by this much are considered equal.
+    private static final double EPSILON = 1e-9;
 
     private int size;
     private double[] series;
@@ -19,115 +21,116 @@ public class TemperatureSeriesAnalysis {
         addTemps(series);
     }
 
-    public double average(){
+    public double average() {
         return summaryStatistics().getAvg();
     }
 
-    public double deviation(){
+    public double deviation() {
         return summaryStatistics().getDev();
     }
 
-    public double min(){
+    public double min() {
         return summaryStatistics().getMin();
     }
 
-    public double max(){
+    public double max() {
         return summaryStatistics().getMax();
     }
 
-    public double findTempClosestToZero(){
+    public double findTempClosestToZero() {
         return findTempClosestToValue(0.0);
     }
 
-    public double findTempClosestToValue(double tempValue){
-        if (size == 0)
+    public double findTempClosestToValue(double tempValue) {
+        if (size == 0) {
             throw new IllegalArgumentException("temperature series is empty");
+        }
 
         double minDiff = Double.POSITIVE_INFINITY;
         double closest = Double.NaN;
         for (int i = 0; i < size; i++) {
-            double diff = Math.abs(tempValue - series[i]);
-            if (diff == minDiff && closest < tempValue && series[i] > tempValue) {
-                closest = series[i];
+            double current = series[i];
+            double diff = Math.abs(tempValue - current);
+            if (Math.abs(diff - minDiff) < EPSILON
+                && closest < tempValue && current > tempValue) {
+                closest = current;
             }
             if (diff < minDiff) {
                 minDiff = diff;
-                closest = series[i];
+                closest = current;
             }
         }
 
         return closest;
     }
 
-    private interface TempPredicate {
-        public boolean test(double currentTemp);
-    }
+    // filter returns all elements of series that are strictly between
+    // lowerBound and upperBound.
+    private double[] filter(double lowerBound, double upperBound) {
+        if (size == 0) {
+            throw new IllegalArgumentException("temperature series is empty");
+        }
 
-    private double[] filter(TempPredicate shouldInclude) {
         int count = 0;
-        for (int i = 0; i < size; i++)
-            if (shouldInclude.test(series[i]))
+        for (int i = 0; i < size; i++) {
+            if (lowerBound < series[i] && series[i] < upperBound) {
                 count++;
+            }
+        }
 
         double[] res = new double[count];
         int p = 0;
-        for (int i = 0; i < size; i++)
-            if (shouldInclude.test(series[i])) {
+        for (int i = 0; i < size; i++) {
+            if (lowerBound < series[i] && series[i] < upperBound) {
                 res[p] = series[i];
                 p++;
             }
+        }
 
         return res;
     }
 
-    // TODO(yznovyak): rename Then -> Than.
-    public double[] findTempsLessThen(final double tempValue){
-        TempPredicate lessThanPredicate = new TempPredicate() {
-            public boolean test(double currentTemp) {
-                return currentTemp < tempValue;
-            }
-        };
-        return filter(lessThanPredicate);
+    public double[] findTempsLessThan(double tempValue) {
+        return filter(Double.NEGATIVE_INFINITY, tempValue);
     }
 
-    // TODO(yznovyak): rename Then -> Than.
-    public double[] findTempsGreaterThen(final double tempValue){
-        TempPredicate greaterThanPredicate = new TempPredicate() {
-            public boolean test(double currentTemp) {
-                return currentTemp > tempValue;
-            }
-        };
-        return filter(greaterThanPredicate);
+    public double[] findTempsGreaterThan(double tempValue) {
+        return filter(tempValue, Double.POSITIVE_INFINITY);
     }
 
-    public TempSummaryStatistics summaryStatistics(){
-        if (size == 0)
+    public TempSummaryStatistics summaryStatistics() {
+        if (size == 0) {
             throw new IllegalArgumentException("temperature series is empty");
+        }
 
         double sumTemp = 0;  // Sum of all temperatures.
-        double sumTemp2 = 0;  // Sum of squares of all temperatures.
-        double minTemp = Double.NEGATIVE_INFINITY;
-        double maxTemp = Double.POSITIVE_INFINITY;
+        double sumTempSqr = 0;  // Sum of squares of all temperatures.
+        double minTemp = Double.POSITIVE_INFINITY;
+        double maxTemp = Double.NEGATIVE_INFINITY;
 
         for (int i = 0; i < size; i++) {
             double temp = series[i];
             sumTemp += temp;
-            sumTemp2 += temp * temp;
+            sumTempSqr += temp * temp;
             minTemp = Math.min(minTemp, temp);
             maxTemp = Math.max(maxTemp, temp);
         }
 
         double avgTemp = sumTemp / size;
-        double varTemp = sumTemp2 / size - avgTemp * avgTemp;
+        double varTemp = sumTempSqr / size - avgTemp * avgTemp;
 
-        return new TempSummaryStatistics(avgTemp, varTemp, minTemp, maxTemp);
+        return new TempSummaryStatistics(avgTemp, Math.sqrt(varTemp), minTemp, maxTemp);
     }
 
-    public int addTemps(double ... newTemps){
-        // Verify newTemps
-        for (double temp : newTemps)
-            if (temp < MIN_TEMPERATURE)
-                throw new InputMismatchException("Series can't contain temperature less than absolute zero.");
+    public int addTemps(double ... newTemps) {
+        // Verify that all temps in newTemps aren't below MIN_TEMPERATURE.
+        for (double temp : newTemps) {
+            if (temp < MIN_TEMPERATURE) {
+                throw new InputMismatchException("Series can't contain " +
+                                                 "temperature less than " +
+                                                 "absolute zero.");
+            }
+        }
 
         int capacity = series.length;
         if (capacity == 0) {
@@ -136,14 +139,17 @@ public class TemperatureSeriesAnalysis {
             // hold exactly newTemps.
             capacity = newTemps.length;
         } else {
-            // Doubling until enough.
+            // Doubling capacity until enough to store new elements.
             int needCapacity = size + newTemps.length;
-            while (capacity < needCapacity)
+            while (capacity < needCapacity) {
                 capacity *= 2;
+            }
         }
 
         if (capacity > series.length) {
-            // Have to re-allocate series into bigger array.
+            // Existing capacity is not enough to contain new items,
+            // so re-allocate series into a bigger array and copy
+            // existing and new elements there.
             double[] newSeries = new double[capacity];
             System.arraycopy(series, 0, newSeries, 0, size);
             series = newSeries;
