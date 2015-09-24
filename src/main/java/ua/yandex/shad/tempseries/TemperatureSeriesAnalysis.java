@@ -117,18 +117,20 @@ public class TemperatureSeriesAnalysis {
         }
 
         double avgTemp = sumTemp / size;
-        double varTemp = sumTempSqr / size - avgTemp * avgTemp;
+        double varTemp = sumTempSqr / size - avgTemp * avgTemp;  // Variance
+        double stddevTemp = Math.sqrt(varTemp);  // Std. Deviation
 
-        return new TempSummaryStatistics(avgTemp, Math.sqrt(varTemp), minTemp, maxTemp);
+        return new TempSummaryStatistics(avgTemp, stddevTemp,
+                                         minTemp, maxTemp);
     }
 
     public int addTemps(double ... newTemps) {
         // Verify that all temps in newTemps aren't below MIN_TEMPERATURE.
         for (double temp : newTemps) {
             if (temp < MIN_TEMPERATURE) {
-                throw new InputMismatchException("Series can't contain " +
-                                                 "temperature less than " +
-                                                 "absolute zero.");
+                throw new InputMismatchException("Series can't contain "
+                                                 + "temperature less than "
+                                                 + "absolute zero.");
             }
         }
 
